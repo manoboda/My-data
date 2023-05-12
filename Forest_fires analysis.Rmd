@@ -1,0 +1,263 @@
+---
+title: "Assignment 3"
+author: "Mano"
+date: "2022-10-11"
+output: html_document
+---
+
+
+
+## R Markdown
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
+library(ggplot2)
+library(dplyr)
+library(GGally)
+library(caret)
+
+```
+#read file
+```{r}
+setwd('C:/Users/kiran/Documents/UW lessons/data mining/assignments/02') #reading file from local drive
+ff_df = read.delim('forestfires.tsv', header = TRUE, sep = '\t')
+
+# look at the first few rows
+head(ff_df)
+summary(ff_df)
+```
+
+#converting factors
+```{r}
+ff_df$month <- as.factor(ff_df$month) #changing into factors
+ff_df$day <- as.factor(ff_df$day) #changing into factors
+
+
+ff_df$X <-as.factor(ff_df$X)
+ff_df$Y <-as.factor(ff_df$Y)
+
+
+data1 <- ff_df
+data1$log_area = log10(data1$area+1)
+summary(data1)
+```
+#creating binary feature
+
+```{r}
+#Create binary features
+month = model.matrix(~ month -1, data = data1)
+head(month)
+day = model.matrix(~ day -1, data = data1)
+head(day)
+
+head(data)
+
+# binarize coordinates
+x = model.matrix(~ X - 1, data = data1)
+y = model.matrix(~ Y - 1, data = data1)
+
+# combine with original dataframe
+data1 = cbind(data1, month, day, x , y)
+
+
+head(data1)
+
+
+```
+
+## Pre-processing
+
+```{r}
+#removing columns
+
+data_features = select(data1, -X, -Y, -month, -day, -area, -log_area)
+
+in_train = createDataPartition(y = data1$log_area,  # "target" variable
+                               p = 0.8,  # percentage of data to be used as training
+                               list = FALSE)
+
+data1_train = data_features[in_train, ]
+data1_test = data_features[-in_train, ]
+
+
+#scaling data
+
+preprocessing_steps = preProcess(data1_train, method = c('center', 'scale', 'nzv'))
+data1_train_proc = predict(preprocessing_steps, newdata = data1_train)
+data1_test_proc = predict(preprocessing_steps, newdata = data1_test)
+
+
+#checking results
+head(data1_train_proc)
+head(data1_test_proc)
+
+#combining log area column to each training and testing set 
+
+ff2 = data1[in_train,]
+ff3 = data1[-in_train, ]
+
+#combining area and log area in the model 
+
+ff_train_proc = cbind(data1_train_proc, log_area=ff2$log_area, area = ff2$area)
+ff_test_proc  = cbind(data1_test_proc,  log_area=ff3$log_area, area = ff3$area)
+
+#checking results
+head(ff_train_proc)
+
+#writing file out
+
+#C:/Users/kiran/Documents/UW lessons/data mining/assignments/04
+
+write.csv(ff_train_proc, "C:/Users/kiran/Documents/UW lessons/data mining/assignments/04/forestfires_train_proc.csv")
+write.csv(ff_test_proc, "C:/Users/kiran/Documents/UW lessons/data mining/assignments/04/forestfires_test_proc.csv")
+
+```
+
+
+
+
+## Fitting a LM Model
+Question 1: Build a linear model that predicts the log(area) using the following features: {FFMC, wind, temp}. According to the results of the model fitting, which of the features is the least impactful in predicting the burn area?
+```{r}
+
+model1 = lm(formula =log_area ~ FFMC + wind + temp, data = ff_train_proc )
+attributes(model1)
+summary(model1)
+model1$coefficients
+
+
+model2 = lm(formula =log_area ~ FFMC + temp, data = ff_train_proc )
+attributes(model2)
+summary(model2)
+model2$coefficients
+
+
+```
+# Looking at summary of model, review P values , wind has 0.00455, it has lower impact the burn area. P value for wind is 0.0458 <0.5 , so has lower impact. temp and FFMC have p >0.5.
+Ran linnear model without wind log_area = 0.4813 + 0.014FFMC + 0.0251temp
+
+#Question 2:
+Question 2 : Using the same model as in Q1, predict on the test data. What is the RMS error, in units of hectares (original unit for the area)? 
+```{r}
+#used area for predicted values to match the question, 
+
+model1_predict = train(area ~ FFMC + temp, data = ff_train_proc, method = 'lm', metric = 'RMSE' )
+
+print("model 1 with area") 
+
+model1_predict
+#predicts target value
+print("predcted values of mode1 with area")
+
+pred = predict(model1_predict,  # model
+               newdata = ff_test_proc)  # gives predict of value
+#view RMSE values  
+
+postResample(pred = pred, obs = ff_test_proc$area)
+
+errors = data.frame(predicted = pred, observed = ff_test_proc$area, error = pred - ff_test_proc$area)
+head(errors)
+
+ggplot(data = errors, aes(x = predicted, y = observed)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, color = 'red') +
+  ggtitle(label = "Predicted vs observation error")
+
+
+```
+RMSE with area for model 3.27 hectares
+The plot shows that predicted vs observations tend to have similar trendline. However it indicates that this model can over predict the burn area too. 
+
+```{r}
+#used log area for predicted values for check 
+
+model2_predict = train(area ~ FFMC + temp, data = ff_train_proc, method = 'lm', metric = 'RMSE' )
+
+print("model 2 with log area")
+
+model2_predict
+#predicts target value
+print("predcted values of mode1 with log area")
+
+pred2 = predict(model2_predict,  # model
+               newdata = ff_test_proc)  # gives predict of value
+#view RMSE values  
+
+postResample(pred = pred2, obs = ff_test_proc$log_area)
+
+errors2 = data.frame(predicted = pred2, observed = ff_test_proc$log_area, error = pred - ff_test_proc$log_area)
+head(errors)
+
+ggplot(data = errors2, aes(x = predicted, y = observed)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, color = 'red') +
+  ggtitle(label = "Predicted vs observation error with log area")
+
+
+```
+ 
+
+
+
+#Question 3: 
+Build a new linear model with all the features and use LASSO regression to tune the model. Instruct the training function to scan over 10 values of the regularization parameter for LASSO, using cross-validation with 5 splits. What value of the hyperparameter was found to be optimal? (*reminder: will need to remove near-zero-variance values from the dataset in order to run LASSO)
+```{r}
+
+nearZeroVar(ff_train_proc, saveMetrics = TRUE)
+head(ff_train_proc)
+
+full_model = train(log_area ~ . -area,  # use all the features, unable to remove area from the model 
+                  data = ff_train_proc, 
+                  method = 'lasso',  #using lasso method, it is variation of lm model
+                  tuneLength = 10,
+                  trControl = trainControl(method = 'cv', number = 5))  # perform cross-validation during training,using cross validation and 5 slpits
+full_model
+
+
+full_model$bestTune
+plot(varImp(full_model))
+```
+best tune fit is 1 variable, the table shows that with 1 variable, RSME is 0.60 which is beter than using multi factors. 
+Using varImp, shows that temperature has significant role in predicting burn area. other factors is location x3, DC, monthsep, area can not be considered factor. I was unable to remove from the model, so it was shown in the plot. Ignoring area, 
+```
+
+#OUTPUT1
+Output 1: Plot the log_area vs. wind (x vs. y) from the test data in Q2, and also overlay the linear line predicted by the model that was used in that question, using the y-intercept and the slope determined by the model fitting. (for FFMC and temp, use the average value in the test data set)
+```{r}
+#log_area = 0.4813 + 0.014FFMC + 0.0251temp
+FFMC = mean(ff_test_proc$FFMC)
+temp = mean(ff_test_proc$temp)  
+
+x = 0.48316 +  0.014 * FFMC +  0.0251* temp
+x
+
+#plot
+ggplot(ff_train_proc, aes(x = wind, y = log_area)) +
+   geom_point() + 
+   geom_hline(yintercept = 0.48316, color = 'red') +
+   ggtitle(label = "log_area vs wind")
+  
+```
+
+Output2: Using the model in Q3, predict on the test data. Run postResample() on the prediction result. 
+```{r}
+
+pred = predict(full_model, newdata = ff_test_proc)
+postResample(pred = pred, obs = ff_test_proc$log_area)
+
+errors = data.frame(predicted = pred, 
+                    observed = ff_test_proc$log_area, 
+                    error = pred - ff_test_proc$log_area)
+
+# plot the correlation between prediction and observation
+ggplot(data = errors, aes(x = predicted, y = observed)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, color = 'red')  +
+  ggtitle(label = "with full model predcited vs observed using LASSO method")
+
+```
