@@ -1,5 +1,5 @@
 ---
-title: "Assignment 2 _forestfires"
+title: "forestfires"
 author: "Mano"
 date: "2022-10-04"
 output: word_document
@@ -20,7 +20,7 @@ library(tidyverse)
 
 
 ```{r}
-setwd('C:/Users/kiran/Documents/UW lessons/data mining/assignments/02') #reading file from local drive
+setwd('C:/Users/kiran/Documents/GitHub/My-data') #reading file from local drive
 df = read.delim('forestfires.tsv', header = TRUE, sep = '\t')
 head(df)
 df$month <- as.factor(df$month) #changing into factors
@@ -29,9 +29,7 @@ summary(df)
 df$area %>% summary()
 ```
 
-## Questions
 
-Question 1: Of the recorded fires with above average burn area, what day-of-the-week had the highest average burn area? Is this indicative of “correlation” or “causation”? 
 
 ```{r }
 
@@ -79,8 +77,7 @@ df %>% ggplot() +
 ```
 Looking at plots, it seems Saturday may have more burn area. Reviewing the overall data month wise, shows that Saturday and Sundays in August and September may have more burn area. This may be that there are more visitors in weekend, which may cause more forest burn area. 
 
-#Question 2
- For the days when it rained, are the burn areas larger or smaller when it rains more?
+
 ```{r }
 df_rain <- df %>% filter(df$rain>0) 
 print("summary of area with rain")  
@@ -149,8 +146,7 @@ Plot and summary table shows that the burn area increase with rain, In theory, b
 
 
 
-#Question 3
-What month had the most recorded days with zero burn area? 
+
 ```{r}
 df_zeroburn <- df %>% filter(df$area == 0) #zero burn area has negligible burn area but fires were recorded. 
 df_zeroburn %>% summary()
@@ -162,8 +158,8 @@ ggplot(df_zeroburn, aes(x = month)) +
 ```
 plot and data summary shows that august month has most recorded days with zero burn area, followed by September
 
-#output 1
-Output 1: Create a “heat map” that shows the maximum burn area for each X/Y coordinate, for days where the wind was above average.
+
+ Create a “heat map” that shows the maximum burn area for each X/Y coordinate, for days where the wind was above average.
 ```{r}
 df$wind %>% summary()
 #average wind is 4.08 from table 
@@ -189,7 +185,7 @@ ggplot(df_heatmap, aes(x = factor(X), y = factor(Y), fill = area_max)) +  # 3-di
 ```
 it shows that coordinates with x=8, y= 6 has most burn area with wind speed greater than average. most of the heat map shows lesser burn area almost 0 to <200. There are some coordinates with 200 to 400 burn area.  
 
-#output 2
+
 Create a ggpairs plot that shows the relationships between wind, temperature and log_area, only for the days when it didn’t rain.
 ```{r}
 
