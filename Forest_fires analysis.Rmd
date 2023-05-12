@@ -1,263 +1,212 @@
 ---
-title: "Forest fires"
+title: "Assignment 2 _forestfires"
 author: "Mano"
-date: "2022-10-11"
-output: html_document
+date: "2022-10-04"
+output: word_document
 ---
-
-
-
 ## R Markdown
-```{r}
-knitr::opts_chunk$set(echo = TRUE)
-```
 
 This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-```{r}
-library(ggplot2)
-library(dplyr)
-library(GGally)
-library(caret)
 
+```{r setup, include=FALSE}
+library(dplyr)
+library(ggplot2)
+#install.packages("GGally")
+library(GGally)
+library(tidyverse)
 ```
-#read file
+
+
 ```{r}
 setwd('C:/Users/kiran/Documents/UW lessons/data mining/assignments/02') #reading file from local drive
-ff_df = read.delim('forestfires.tsv', header = TRUE, sep = '\t')
-
-# look at the first few rows
-head(ff_df)
-summary(ff_df)
+df = read.delim('forestfires.tsv', header = TRUE, sep = '\t')
+head(df)
+df$month <- as.factor(df$month) #changing into factors
+df$day <- as.factor(df$day) #changing into factors
+summary(df)
+df$area %>% summary()
 ```
 
-#converting factors
-```{r}
-ff_df$month <- as.factor(ff_df$month) #changing into factors
-ff_df$day <- as.factor(ff_df$day) #changing into factors
+## Questions
 
+Question 1: Of the recorded fires with above average burn area, what day-of-the-week had the highest average burn area? Is this indicative of “correlation” or “causation”? 
 
-ff_df$X <-as.factor(ff_df$X)
-ff_df$Y <-as.factor(ff_df$Y)
+```{r }
 
+levels(df$month) # to verify level and order
+levels(df$day)
+#average burn area recorded is 12.85
+#modifying the order to plot 
+df$month = factor(df$month, 
+                  levels = c('jan','feb' ,'mar', 'apr', 'may' , 'jun', 'jul' , 'aug', 'sep' ,'oct', 'nov', 'dec'))
 
-data1 <- ff_df
-data1$log_area = log10(data1$area+1)
-summary(data1)
-```
-#creating binary feature
+df$day = factor(df$day, 
+                levels = c('sun','mon','tue', 'wed', 'thu', 'fri', 'sat'))
+levels(df$day)
 
-```{r}
-#Create binary features
-month = model.matrix(~ month -1, data = data1)
-head(month)
-day = model.matrix(~ day -1, data = data1)
-head(day)
+burn_day = 
+  df %>% 
+    group_by(day) %>%
+    summarize(area_mean1 = mean(area))
 
-head(data)
-
-# binarize coordinates
-x = model.matrix(~ X - 1, data = data1)
-y = model.matrix(~ Y - 1, data = data1)
-
-# combine with original dataframe
-data1 = cbind(data1, month, day, x , y)
-
-
-head(data1)
-
-
-```
-
-## Pre-processing
-
-```{r}
-#removing columns
-
-data_features = select(data1, -X, -Y, -month, -day, -area, -log_area)
-
-in_train = createDataPartition(y = data1$log_area,  # "target" variable
-                               p = 0.8,  # percentage of data to be used as training
-                               list = FALSE)
-
-data1_train = data_features[in_train, ]
-data1_test = data_features[-in_train, ]
-
-
-#scaling data
-
-preprocessing_steps = preProcess(data1_train, method = c('center', 'scale', 'nzv'))
-data1_train_proc = predict(preprocessing_steps, newdata = data1_train)
-data1_test_proc = predict(preprocessing_steps, newdata = data1_test)
-
-
-#checking results
-head(data1_train_proc)
-head(data1_test_proc)
-
-#combining log area column to each training and testing set 
-
-ff2 = data1[in_train,]
-ff3 = data1[-in_train, ]
-
-#combining area and log area in the model 
-
-ff_train_proc = cbind(data1_train_proc, log_area=ff2$log_area, area = ff2$area)
-ff_test_proc  = cbind(data1_test_proc,  log_area=ff3$log_area, area = ff3$area)
-
-#checking results
-head(ff_train_proc)
-
-#writing file out
-
-#C:/Users/kiran/Documents/UW lessons/data mining/assignments/04
-
-write.csv(ff_train_proc, "C:/Users/kiran/Documents/UW lessons/data mining/assignments/04/forestfires_train_proc.csv")
-write.csv(ff_test_proc, "C:/Users/kiran/Documents/UW lessons/data mining/assignments/04/forestfires_test_proc.csv")
-
-```
-
-
-
-
-## Fitting a LM Model
-Question 1: Build a linear model that predicts the log(area) using the following features: {FFMC, wind, temp}. According to the results of the model fitting, which of the features is the least impactful in predicting the burn area?
-```{r}
-
-model1 = lm(formula =log_area ~ FFMC + wind + temp, data = ff_train_proc )
-attributes(model1)
-summary(model1)
-model1$coefficients
-
-
-model2 = lm(formula =log_area ~ FFMC + temp, data = ff_train_proc )
-attributes(model2)
-summary(model2)
-model2$coefficients
-
-
-```
-# Looking at summary of model, review P values , wind has 0.00455, it has lower impact the burn area. P value for wind is 0.0458 <0.5 , so has lower impact. temp and FFMC have p >0.5.
-Ran linnear model without wind log_area = 0.4813 + 0.014FFMC + 0.0251temp
-
-#Question 2:
-Question 2 : Using the same model as in Q1, predict on the test data. What is the RMS error, in units of hectares (original unit for the area)? 
-```{r}
-#used area for predicted values to match the question, 
-
-model1_predict = train(area ~ FFMC + temp, data = ff_train_proc, method = 'lm', metric = 'RMSE' )
-
-print("model 1 with area") 
-
-model1_predict
-#predicts target value
-print("predcted values of mode1 with area")
-
-pred = predict(model1_predict,  # model
-               newdata = ff_test_proc)  # gives predict of value
-#view RMSE values  
-
-postResample(pred = pred, obs = ff_test_proc$area)
-
-errors = data.frame(predicted = pred, observed = ff_test_proc$area, error = pred - ff_test_proc$area)
-head(errors)
-
-ggplot(data = errors, aes(x = predicted, y = observed)) + 
-  geom_point() + 
-  geom_abline(intercept = 0, slope = 1, color = 'red') +
-  ggtitle(label = "Predicted vs observation error")
-
-
-```
-RMSE with area for model 3.27 hectares
-The plot shows that predicted vs observations tend to have similar trendline. However it indicates that this model can over predict the burn area too. 
-
-```{r}
-#used log area for predicted values for check 
-
-model2_predict = train(area ~ FFMC + temp, data = ff_train_proc, method = 'lm', metric = 'RMSE' )
-
-print("model 2 with log area")
-
-model2_predict
-#predicts target value
-print("predcted values of mode1 with log area")
-
-pred2 = predict(model2_predict,  # model
-               newdata = ff_test_proc)  # gives predict of value
-#view RMSE values  
-
-postResample(pred = pred2, obs = ff_test_proc$log_area)
-
-errors2 = data.frame(predicted = pred2, observed = ff_test_proc$log_area, error = pred - ff_test_proc$log_area)
-head(errors)
-
-ggplot(data = errors2, aes(x = predicted, y = observed)) + 
-  geom_point() + 
-  geom_abline(intercept = 0, slope = 1, color = 'red') +
-  ggtitle(label = "Predicted vs observation error with log area")
-
-
-```
+df2 <- burn_day %>% select(day, area_mean1)
+df2
+#per day plot
+ggplot(burn_day) +
+  geom_bar(mapping = aes(x =day, y = area_mean1) , stat = "identity") +
+   
+   ggtitle(label = "Summarized by weekdays") +
+   labs( y = "Area mean by day", x = "weekday")
  
 
 
+  
+#plot for overall with log scale for better data review for reviewing cause vs correlation 
+df %>% ggplot() +
+  geom_bar(mapping = aes(x = day, y = area + 1) , stat = "identity") +
+  facet_wrap(~ month) +
+  scale_y_log10() +
+  ggtitle(label = "Summarized by month",
+          subtitle = "using facet wrap by month") +
+  labs( y = "Log area", x = "weekday")
+  
 
-#Question 3: 
-Build a new linear model with all the features and use LASSO regression to tune the model. Instruct the training function to scan over 10 values of the regularization parameter for LASSO, using cross-validation with 5 splits. What value of the hyperparameter was found to be optimal? (*reminder: will need to remove near-zero-variance values from the dataset in order to run LASSO)
-```{r}
+  
 
-nearZeroVar(ff_train_proc, saveMetrics = TRUE)
-head(ff_train_proc)
-
-full_model = train(log_area ~ . -area,  # use all the features, unable to remove area from the model 
-                  data = ff_train_proc, 
-                  method = 'lasso',  #using lasso method, it is variation of lm model
-                  tuneLength = 10,
-                  trControl = trainControl(method = 'cv', number = 5))  # perform cross-validation during training,using cross validation and 5 slpits
-full_model
-
-
-full_model$bestTune
-plot(varImp(full_model))
-```
-best tune fit is 1 variable, the table shows that with 1 variable, RSME is 0.60 which is beter than using multi factors. 
-Using varImp, shows that temperature has significant role in predicting burn area. other factors is location x3, DC, monthsep, area can not be considered factor. I was unable to remove from the model, so it was shown in the plot. Ignoring area, 
-```
-
-#OUTPUT1
-Output 1: Plot the log_area vs. wind (x vs. y) from the test data in Q2, and also overlay the linear line predicted by the model that was used in that question, using the y-intercept and the slope determined by the model fitting. (for FFMC and temp, use the average value in the test data set)
-```{r}
-#log_area = 0.4813 + 0.014FFMC + 0.0251temp
-FFMC = mean(ff_test_proc$FFMC)
-temp = mean(ff_test_proc$temp)  
-
-x = 0.48316 +  0.014 * FFMC +  0.0251* temp
-x
-
-#plot
-ggplot(ff_train_proc, aes(x = wind, y = log_area)) +
-   geom_point() + 
-   geom_hline(yintercept = 0.48316, color = 'red') +
-   ggtitle(label = "log_area vs wind")
   
 ```
+Looking at plots, it seems Saturday may have more burn area. Reviewing the overall data month wise, shows that Saturday and Sundays in August and September may have more burn area. This may be that there are more visitors in weekend, which may cause more forest burn area. 
 
-Output2: Using the model in Q3, predict on the test data. Run postResample() on the prediction result. 
-```{r}
+#Question 2
+ For the days when it rained, are the burn areas larger or smaller when it rains more?
+```{r }
+df_rain <- df %>% filter(df$rain>0) 
+print("summary of area with rain")  
+df_rain %>% summary()
+nrow(df_rain)
 
-pred = predict(full_model, newdata = ff_test_proc)
-postResample(pred = pred, obs = ff_test_proc$log_area)
 
-errors = data.frame(predicted = pred, 
-                    observed = ff_test_proc$log_area, 
-                    error = pred - ff_test_proc$log_area)
+#plot of Burn area with rain
 
-# plot the correlation between prediction and observation
-ggplot(data = errors, aes(x = predicted, y = observed)) + 
-  geom_point() + 
-  geom_abline(intercept = 0, slope = 1, color = 'red')  +
-  ggtitle(label = "with full model predcited vs observed using LASSO method")
+
+ggplot(df_rain,aes(x = rain, y = area + 1))  +  # plotting burn area vs. relative humidity
+  geom_point() +  # scatter plot
+  geom_jitter() +
+  scale_y_log10() +
+  geom_smooth(method = "lm", se = TRUE)  + # add linear trendline 
+  ggtitle(label = "Burn area with rain", nrow(df_rain)) +
+  labs( y = "log area")
+```
+Plot and summary table shows that the burn area increase with rain,
+#next chunk is to identify what factors may have impacted this corrleation. 
+
+```{r }
+#plot of burn area with rain with factors of  humidity, wind & temp
+
+ggplot(df_rain,aes(x = RH, y = area + 1))  +  # plotting burn area vs. FFMC
+  geom_point(size = df_rain$rain) +  # scatter plot
+  geom_jitter() +
+  geom_smooth(method = "lm", se = TRUE)  + # add linear trendline 
+  ggtitle(label = "Burn Area with RH", nrow(df_rain)) +
+  scale_y_log10() +
+  labs( y = "log area")
+
+ggplot(df_rain,aes(x = temp, y = area +1))  +  # plotting burn area vs. DMC
+  geom_point(size = df_rain$rain) +  # scatter plot
+  geom_jitter() +
+  geom_smooth(method = "lm", se = TRUE)  + # add linear trendline 
+  #facet_grid(day~month) + 
+  ggtitle(label = "Burn Area with temp", nrow(df_rain))+
+  scale_y_log10() +
+  labs( y = "log area")
+
+ggplot(df_rain,aes(x = wind, y = area + 1))  +  # plotting burn area vs. DC
+  geom_point(size = df_rain$rain) +  # scatter plot
+  geom_jitter() +
+  geom_smooth(method = "lm", se = TRUE)  + # add linear trendline 
+  #facet_grid(day~month) + 
+  ggtitle(label = "Burn Area with wind", nrow(df_rain)) +
+  scale_y_log10() +
+  labs( y = "log area")
+
+
+
+
+#ggpairs with temp, RH, wind , rain to understand any correlation with rain with other factors
+ggpairs(select(df_rain, temp, RH, wind, rain), mapping = aes(alpha =0.5)) +
+  ggtitle(label ="ggpairs for temp, wind , RH and rain ")
+
+#ggpairs with idex
+ggpairs(select(df_rain, FFMC, DMC, DC, ISI, rain), mapping = aes(alpha =0.5)) +
+  ggtitle(label ="ggpairs for FFMC,DC, DMC , ISI and rain ")
 
 ```
+
+Plot and summary table shows that the burn area increase with rain, In theory, burn area should be less with rain. This may be effect of other factors.Next step was more analysis. The plot between temp & burn area with rain, shows increasing while humidity vs burn area shows decreasing trend. Similar correlation can be seen using ggpairs.  strong (positive) correlation with rain & temp and moderate correlation (negative) with RH. Temperature and humidity may have effected the burn area.  Temp & humidity can effect the indices . hence ggpairs with indices also show correlation. 
+
+
+
+
+#Question 3
+What month had the most recorded days with zero burn area? 
+```{r}
+df_zeroburn <- df %>% filter(df$area == 0) #zero burn area has negligible burn area but fires were recorded. 
+df_zeroburn %>% summary()
+ggplot(df_zeroburn, aes(x = month)) +
+  geom_bar() +
+  ggtitle(label = " Plot of month vs zero burn area")
+
+
+```
+plot and data summary shows that august month has most recorded days with zero burn area, followed by September
+
+#output 1
+Output 1: Create a “heat map” that shows the maximum burn area for each X/Y coordinate, for days where the wind was above average.
+```{r}
+df$wind %>% summary()
+#average wind is 4.08 from table 
+
+
+ 
+df_heatmap =
+  df %>%
+    filter(wind > 4.08) %>% #filtered wind values > average value of 4.08
+    group_by(X , Y) %>%
+    summarize(area_max = max(area))
+
+df_heatmap
+#heat map
+ggplot(df_heatmap, aes(x = factor(X), y = factor(Y), fill = area_max)) +  # 3-dimensional data, with the area_mean (3rd variable) being used for the fill
+  geom_tile() +  # 2-dimensional 'heat-map'
+  scale_fill_gradient2() + # gradient fill, corresponding to area_mean
+   ggtitle(label = "Heat map") +
+   labs(y = "y coordinate" , x ="x coordinate")
+
+
+
+```
+it shows that coordinates with x=8, y= 6 has most burn area with wind speed greater than average. most of the heat map shows lesser burn area almost 0 to <200. There are some coordinates with 200 to 400 burn area.  
+
+#output 2
+Create a ggpairs plot that shows the relationships between wind, temperature and log_area, only for the days when it didn’t rain.
+```{r}
+
+df$log_area = log10(df$area + 1)
+
+df_worain <-df %>% filter(df$rain == 0) %>% select(wind, temp,log_area, day)
+
+
+ggpairs(select(df_worain, wind, temp, log_area, day),mapping = aes(color = day, alpha = 0.5)) +
+  ggtitle(label = "ggpairs with  wind, temp and log_area color as day")
+
+
+ggpairs(select(df_worain, wind, temp, log_area, day),mapping = aes (alpha = 0.5)) +
+   ggtitle(label = "ggpairs for wind, temp, log_area and day")
+
+
+
+
+```
+1st & 2nd plot are same. However 1st seemed more confusing with days. So using 2nd plot for this. 2nd plot with ggpair with all 4 included, shows interesting trend. The correlation of log_area to wind is 0.076, whie log_area to temp is 0.050, which indicates very low correlation. There may be a relativley mediucm negative correlation of temp to wind at -0.234. 
